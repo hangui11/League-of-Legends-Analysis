@@ -63,7 +63,7 @@ All methods were used to uncover patterns in champion behavior and performance, 
 ## 📁 Project Structure
 
 ```
-/league-champions-r-analysis
+/League-of-Legends-Analysis
 │
 ├── Lol_champions.csv       # Dataset file
 ├── Project.rmd             # R markdown for analysis
