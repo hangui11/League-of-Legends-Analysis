@@ -1,0 +1,1395 @@
+---
+# title: "MVA Project - League Of Legends data set"
+# output: pdf_document
+# date: "2024-12-21"
+# author: Luísa Fontanete, Haonan Jin and Hang Yao
+output:
+  bookdown::pdf_document2:
+    number_sections: true
+    toc: false
+    toc_depth: 4
+    highlight: tango
+header-includes:
+  - \usepackage{titling}  # Enable custom title formatting
+  - \setcounter{tocdepth}{4} # Set the ToC depth in LaTeX
+  - \usepackage{fancyhdr}  # For custom headers/footers if needed
+  - \usepackage{xcolor}
+  - \usepackage{booktabs}  # For better table formatting in LaTeX
+  - \usepackage{float}
+  - \floatplacement{table}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_hooks$set(fig.cap = function(options) {
+  options$fig.env = 'figure'  # Ensure the figure stays as a single block
+  options
+})
+```
+
+
+```{r library, include=FALSE}
+rm(list = ls())
+# Including necessary libraries
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(car)
+library(FactoMineR)
+library(cluster)
+library(cabootcrs)
+library(factoextra)
+library(corrplot)
+library(gridExtra)
+library(kableExtra)
+library(knitr)
+library(MASS)
+library(biotools)
+library(DescTools)
+library(cowplot)
+library(klaR)
+```
+
+<!-- Cover Page -->
+\pagenumbering{gobble}
+\vspace*{1.5in}
+\begin{center}
+\LARGE \textbf{League of Legends Champions Dataset}\\[0.5cm]
+\Large Multivariate Analysis\\[1.0cm]
+\large Luísa Fontanete, Haonan Jin and Hang Yao\\[1.0cm]
+\large 2024-12-23
+\end{center}
+\newpage
+
+<!-- Table of Contents -->
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+
+
+# Introduction
+
+This data set contains detailed information about **167** champions from **League of Legends**. This is a PvP (Player versus Player) game that has outstanded from the other games since its released date. The game has basically 5 roles, which consists of **Top**, **Jungle**, **Mid**, **Bottom** and **Support**, and each role has its way to play the game. In addition, this data set also includes some initial champion statistics and his growth capacity.
+
+The data set can be used for various purposes such as statistical analysis. The main objective consists to determine the best champion for each role, meaning the one who has the highest statistics in it determined role. Let's explain the variables of the data: 
+
+-   Name: the name of the League of Legends champion.
+
+-   Tags: tags or legacy classes of the champion. List of tags: **Assassin**, **Fighter**, **Mage**, **Marksman**, **Support**, **Tank**.
+
+-   Role: the primary role or a position played by the champion.
+
+    -   Top: focus on defensive stats (HP, armor, magic resistance) and sustainable (HP regeneration). These champions typically are durable and have a few of attack damage.
+    -   Jungle: emphasize base armor, and attack speed. These champions often need good early-game stats for jungle clear efficiency.
+    -   Middle: look at mana-related stats, burst damage potential (high mana stats, high ability damage). Versatility and damage output are key factors.
+    -   Bottom: prioritize attack damage, attack speed, and attack range. These champions are expected to have high offensive stats but lower defensive stats.
+    -   Support: look at utility stats (mana regeneration, armor) and sustain stats (HP regeneration). Supports are less focused on damage and more on enabling and protecting their teammates.
+
+-   Range type: whether the champion is melee or ranged.
+
+-   Resourse type: the resource that a champion can generate and consume when using abilities or a basic attack.
+
+-   Base HP: the champions base health points (HP) at level 1.
+
+-   HP per lvl: the amount of hp the champion gains per level.
+
+-   Base mana: the champion's base mana points at level 1.
+
+-   Mana per lvl: the amount of mana points (MP) the champion gains per level.
+
+-   Movement speed: the champion's base movement speed.
+
+-   Base armor: the champion's base armor at level 1.
+
+-   Armor per lvl: the amount of armor the champion gains per level.
+
+-   Base magic resistance: the champion's base magic resistance at level 1.
+
+-   Magic resistance per lvl: the amount of magic resistance the champion gains per level.
+
+-   Attack range: the range of the champion's basic attacks.
+
+-   HP regeneration: determines the rate that a unit's current health passively regenerates, measured per 5 seconds.
+
+-   HP regeneration per lvl: the amount of health regeneration the champion gains per level.
+
+-   Mana regeneration: determines the rate that a unit's current mana passively regenerates, measured per 5 seconds.
+
+-   Mana regeneration per lvl: the amount of mana regeneration the champion gains per level.
+
+-   Attack damage: the champion's base attack damage at level 1.
+
+-   Attack damage per lvl: the amount of attack damage the champion gains per level.
+
+-   Attack speed per lvl: the amount of attack speed the champion gains per level (%).
+
+-   Attack speed: the champion's base attack speed (AS).
+
+-   AS ratio: adjusts the effectiveness of bonus AS from all sources.
+
+
+In this project, we will apply various methods acquired in this master course, including **Principal Component Analysis**, **Multidimensional Scaling**, **Cluster Analysis**, and  others, as our data set is well-suited for these analytical techniques. However, we have chosen to focus **Multiple Correspondence Analysis** instead of **Correspondence Analysis**, due to the results of the MCA is more suitable for the dataset, providing significant results to analyze them.
+
+In the following sections, we will analyze several interesting variables. For each method, we will explain its objective and describe its specific role in the analysis. Finally, we will integrate the results from all methods to present a comprehensive conclusion.
+
+```{r read-dataset, include=FALSE}
+df <- read.csv("LoL_champions.csv")
+head(df)
+summary(df)
+```
+
+# Exploratory Data Analysis
+
+## Data Transformation
+
+In this section, we have converted all categorical variables to factor variables for the posterior analysis, specifically the variables `Tags`, `Role` and `Range.type`. Also, we have observed that some rows in the `Resourse.type` have **NULL** values (""), so we have converted these rows to the category **Nothing**, since that doing a categorical variables imputation is not all correct because each observation has itself type of resource.
+
+```{r echo=FALSE}
+df$Range.type <- as.factor(df$Range.type)
+# str(df)
+
+ll <-which(df$Resourse.type == '')
+# df[ll,]
+df$Resourse.type[ll] <- "Nothing"
+df$Resourse.type <- as.factor(df$Resourse.type)
+```
+
+We have fixed and transformed the variables `Role` and `Tags`, since these two variables contain more than one category for each observations, so we have decided to keep the first category that appears in each row because the main role and tag of an individual is the first ones. Additionally, we have converted the name of each observation to it row name.
+
+```{r echo=FALSE}
+df <- df %>%
+  mutate(Tags = sub(",.*", "", Tags))
+
+df <- df %>%
+  mutate(Role = sub(",.*", "", Role))
+
+df$Tags <- as.factor(df$Tags)
+df$Role <- as.factor(df$Role)
+
+rownames(df) <- df$Name
+df <- df[,-1]
+```
+
+Finally, as we can see in the figure \@ref(fig:data-transformation-attack-range), the numerical variable `Attack.range` is mostly like a categorical variable, since the distribution of this variable is non normally distributed. We have checked this behavior using **Shapiro Wilk Normality test** (table \@ref(tab:shapiro-test-attack-range)), and the p-value (4e-15) is less than 0.05, so the null hypothesis (the variable is normally distributed) is rejected. Moreover, it only has 19 different values, so converting to a categorical variable will be better to analyze. 
+
+We have used quantiles to assign the range type to each observation according to it attack range value, we have divided to three categories (**Close Range**, **Medium Range** and **Long Range**), this variable now is converted to a categorical variable with three levels.
+
+```{r echo=FALSE}
+df_data_transformation <- df
+```
+
+```{r fig.align='center', fig.width=12, fig.height=4, echo=FALSE}
+var <- df[["Attack.range"]]
+quartiles <- quantile(var, probs = c(0.25, 0.5, 0.75), na.rm = TRUE)
+# quartiles
+
+df$Attack.range <- ifelse(var <= quartiles[1], 1,
+                            ifelse(var > quartiles[1] & var <= quartiles[2], 2,
+                                   ifelse(var > quartiles[2] & var <= quartiles[3], 3,3)))
+
+df$Attack.range <- factor(df$Attack.range, labels = c("Close Range", "Medium Range", "Long Range"), 
+                            ordered = TRUE, levels = c(1, 2, 3))
+
+```
+
+## Data Visualization
+
+Firstly, let's analyze some categorical variables. The `Attack.range` variable, which we have converted to categorical variable, shows that the **Long Range** category is the highest one, suggesting most of observations are included to this type. Another interesting categorical variable is `Tags` variable, which indicates the tag for each observation. The most frequent one is the **Fighter** category and the least one is the **Support** category. That means most of the champions are fighter and only a small proportion are support. As we can see in the figure \@ref(fig:data-visualization-histograms).
+
+```{r echo=FALSE, fig.align='center', fig.width=12, fig.width=5}
+df_data_visualization <- df
+```
+
+We could see boxplots of several numerical variables, which we have analyzed its behavior. As we could see that the `Base.HP` has two outlier champions (lower outliers), indicating these champions have low health at the level 1. Another boxplot, where has presence of outliers is the `Attack.speed` variable, one lower outlier and six upper outliers, meaning its `Attack.speed` is far from the mean value. The existence of outliers will show some interesting behavior between the points in the posterior analysis because the outlier variables might be the variables that distinct a set of observations from others sets. The other two variables do not have presence of outliers since the boxplots do not show any outliers. As we can see the figure \@ref(fig:data-visualization-boxplots) in the appendix.
+
+## Data Summary
+
+In this subsection, we wanna analyze the proportion of the champions that matches their `Tags` with `Role` (table \@ref(tab:data-summary-proportional-tables1)). We have observed a distribution and they seemed to be mostly correct distributed by the concept of each `Role` (we know that each `Role` has different tasks to do. For example, the tag **assassin** will be the perfect profession to go for the roles **Middle** and **Jungle**).
+
+For another distribution (table \@ref(tab:data-summary-proportional-tables2)), `Role` and `Attack.range`, we could observe that **Close Range** and **Medium range** categories do not have any champions with **Bottom** role, the most frequent role in these two categories is the **Top** role, and followed by **Jungle** role. On the **Long Range** category, we could see that **Bottom** and **Middle** roles are the dominant ones in it. In the case of **Top** role the proportion of **Long range** is very poor.
+
+We have chosen various variables that we considered interesting to analyze their correlations. So we got some of the base statistics, such as attack damage and attack speed. Looking through the correlation plot, we can see most of the variables are not even correlated but only one of them seems to be positive correlated such as `Base.armor` and `Attack.damage`. Also, some negative correlation between these numerical variables, such as `Base.armor` and `Base.mana`. As we can see in the figure \@ref(fig:data-summary-correlation-plots) and table \@ref(tab:data-summary-correlation-table).
+
+
+# Principal Component Analysis 
+
+In our project, the PCA is used to analyze the correlations among the different statistical variables of the champions, and to understand the relationships between the individuals and their variables. This analysis helps us identify the strongest characteristics of each champion and explore how champions relate to each other based on their statistics. We included all numerical variables, except `Movement.speed` and `AS.ratio`, since these variables are not correlated with any other variables. Also, the **"best"** champion (of each role) is not depended on these two variables.
+
+```{r echo=FALSE}
+res.pca <- PCA(df, scale=TRUE, ncp=6, quanti.sup=c(9,23), quali.sup=c(1,2,3,4,14), graph=FALSE)
+```
+
+According to the Kaiser Rule, the dimensions 1-5 are chosen. But according to thumb rule, the dimensions 1-6 are chosen. Since the dimension 6 has a eigenvalue close to 1, so we have decided to choose the dimensions 1-6. As we can observe the figure \@ref(fig:pca-scree-plot) and table \@ref(tab:pca-eig-table) in the appendix section.
+
+Looking at the figure \@ref(fig:pca-correlation-plot), the first dimension is dominated by the variables `Base.HP`, `Base.armor`, `Magic.resistance.per.lvl`, `HP.regeneration`, `Attack.damage`, so we can denominate this dimension like **Durability and damage statistics**, since these aspects match to those champions (durable with high damage). In the second dimension, we could name it as **Mana growth**, due to the dimension is related with the mana growth variables. In the third dimension could be named like **Attack speed growth and regeneration capacity**, given that the correlated variable is `Attack.speed.per.lvl`, `HP.regeneration.per.lvl` and `Mana.regeneration`.
+
+In the dimension 4, the most related variable is `Armor.per.lvl`, so is named as **Armor growth**. The `Attack.speed` variable is the one that most correlated with the dimension 5, so it could be named as **Basic attack speed**. Then, the dimension 6 can be denominated as **Health growth**, since the variable `HP.per.lvl` is dominant one.
+
+As we said previously, the below figure (figure \@ref(fig:pca-variables-dimensions-123)) shows the variables most correlated to each dimensions. The first plot, which indicating the dimensions 1 and 2, the individuals that situated at the right side have a good durability and damage statistics, and the ones, who positioned at the second quadrant have a good mana growth capacity. Moreover, the champions that positioned to the negative side of the dimensions are not "good" champions in term of durability, damage and mana growth.
+
+Looking at the second plot of the figure, which representing the dimensions 2 and 3. We could observe that the dominant variables of these dimensions are related to regeneration and growth, such as `Mana.regeneration`, `HP.regeneration.per.lvl`, `Mana.generation.per.lvl`, `Attack.speed.per.lvl` and `Mana.per.lvl`, `Base.mana`. Indicating the champions that positioned to the positive side are those that have good regeneration and statistics as the level increases. The negative side of the dimensions indicating good durability, damage and attack speed at level 1 and great attack speed as the level increases, those individuals are better champions at the level 1 compare to anothers ones, as they have good statistics only at the first level.
+
+On the other plots (figure \@ref(fig:pca-variables-plots)), reflect the same interpretation as the plots that we have interpreted previously, only changing the combination between dimensions. In conclusion, the individuals situated at the positive side of the dimensions are the ones most correlated with the dominant variables in those dimensions.  
+
+```{r pca-variables-dimensions-123, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="PCA Variables Dimensions 1, 2 and 3"}
+# Variable coordinates give loadings.
+# var$cor gives correlation of variables with the factors.
+p1 <- fviz_pca_var(res.pca, col.var = "black", repel = TRUE, axes=c(1,2))
+p2 <- fviz_pca_var(res.pca, col.var = "black", repel = TRUE, axes=c(2,3))
+combined_plots <- plot_grid(p1, p2, nrow=1, ncol=2)
+combined_plots
+```
+
+Another behavior to demonstrate the most correlated or dominant variables in each dimension is use the contribution of variables to dimensions. The variables which have high contribution in dimensions are the dominant ones. In the figure \@ref(fig:pca-variables-contributions), we could see the contribution of variables to dimensions 1-2 and 2-3. The results shown that the most contribution of each pair dimensions are the ones that appear in the anterior plots.
+
+Let's analyzing the individuals relation with the dimensions, the following figure \@ref(fig:pca-individuals-dimensions-123) also show the relevance of champions in the dimensions (the individuals related with the dimension are the relevant ones). As we said previously, the dimension 1 is dominant per high durability and damage champions. The dimension 2, the champions with high mana growth. So, in the first plot, which projects dimensions 1 and 2, the champions that situated at right side are those that have great durability and damage statistics, such as "Camille", "Darius", "Tryndamere" or "Shyvana", but the case of "Tryndamere" and "Shyvana" are situated at the quart quadrant, indicating a high durability and damage statistics with a low mana growth. In the second quadrant, we could observe various correlated champions with the dimension 2, such as "Syndra", "Ryze", "Zilean", "Kassadin", with a high mana growth but a low durability and basic attack statistics. The extreme champion "Briar", which situated at the bottom of the third quadrant, has a low mana growth, durability and damage statistics, as it is totally at opposite side of the correlated variables in these two dimensions. Additionally, we want to highlight the champions positioned around of the center of the plot, which have a low variance in this plot, meaning they are not or a few correlated with the dominant variables in these two dimensions. Then these champions variables, specifically the dominant ones in the dimensions, are not significance to these dimensions.
+
+Observing the second plot, which projects the individuals in the principal components 2 and 3. We could see interesting aspect, where most of the champions are around of the center. Only the far ones showing a high variance with the dimensions, since they are more spread around the plot. Looking at the most right side of the plot, the champions "K'Sante", "Ryze", "Naafiri" have a high relation with the dimension 2, indicating a great mana growth compare to another ones. On the top of the second quadrant, we could see that the individuals are more spread because the relevance or variance of their variables are different. For example, "Akali" are the one that best matched with the dimension 3 (high attack speed growth and regeneration). On the other hand, "Kennen", "Shen", "Lee Sin" are correlated with the dimension 3, but not as much as "Akali", this is caused that they have some correlated variables with low values. 
+
+We could observe that the bottom of the third quadrant, have some relevant champions, such as "Briar", "Zac", "Rengar". They are negative correlated with the dominant variables in these two dimensions, meaning they do not have a nice mana growth neither a good attack speed nor regeneration capacity. This information is useful because we can know which individuals are "better" or "worst" in the dimensions. Moreover, we can conclude that closely positioned observations share similar dominant variables within the dimensions. For example, in the first plot, the bottom of the fourth quadrant, the champions "Zac" and "Riven" are very close, suggesting they have similar values in `Mana.regeneration.per.lvl`, `Base.mana`, `Magic.resistance.per.lvl`, `Attack.damage`, `Base.armor`, `HP.regeneration`.
+
+The other plots (figure \@ref(fig:pca-individuals-plots)) have no sense to analyze since the most of champions are around of the center, only a few have significant variance in those dimensions. So, the dimensions which have more variance are the dimensions 1 and 2, since they capture most of variance of the variables.
+
+```{r pca-individuals-dimensions-123, echo=FALSE, fig.align='center', fig.height=5, fig.width=12, fig.cap="PCA Individuals Dimensions 1, 2 and 3"}
+# The plot of individual scores on 2 dimensions
+p1 <- fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE, ggtheme = theme_minimal(), axes=c(1,2),labelsize=3)
+p2 <- fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE, ggtheme = theme_minimal(), axes=c(2,3), labelsize=3)
+combined_plots <- plot_grid(p1, p2, nrow=1, ncol=2)
+combined_plots
+```
+
+The PCA successfully demonstrated the correlations among the statistical variables of the champions, such as the champions with a high `Attack.damage`, also have a high `HP.regeneration` or `Base.armor`, since these attributes are related in the reduce dimensions. Also, provided ideas into the relationships between champions and their variables to determine the strongest ones.
+
+After analyzing the dominant variables of each dimension, and according to the role descriptions mentioned in the **Introduction** section (each role has it strongest variables). We could determine the **"best"** champion for the roles using this relationships between role and variables (if it is possible).
+
+We only could use the first two principal components to determine the **"best"** champions according to the roles, due to that the dominant variables in other dimensions are not totally matched with the "role variables" (the strongest statistics of each role). The correlated variables to the dimension 1 are those related to defensive stats and damage, these variables match perfect to the **Top** role, so the strongest champions in this role are those that have high correlation within the dimension 1, such as "Tryndamere", "Darius", "Illaoi". On the second principal component, the dominant variables are related to the mana stats. It match perfectly with the **Middle** role, so the champions positively correlated with this dimension are the most powerful ones, such as "Sylas", "Ryze", "Naafiri", "Galio". As we can observe in the figure \@ref(fig:pca-individuals-contributions).
+
+
+# Multidimensional Scaling
+
+We use MDS because we want to visualize how similar or different characters are to each other based on their attributes (HP, mana, armor, etc.) in a way that's easy to interpret visually and also see if characters with similar roles cluster together, suggesting they share common characteristics. In this case, we do not use all the variables, rather we chose for the numerical only theirs base statistics (without including the variables that contains "per.lvl") and include all the categorical ones. As we can see the coordinate distributions in the following figure \@ref(fig:mds-plot).
+
+```{r mds-plot, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="MDS Coordinates", warning=FALSE}
+df_mds <- df
+
+data_with_categorical <- df[, c(1,2,3,4,5,7,10,12,14,15,17,19,22)]
+
+# names(data_with_categorical)
+
+# Calculate the Gower distance matrix, the variables are internally scaled by this method
+gower_dist <- daisy(data_with_categorical, metric = "gower")
+
+mds_gower <- cmdscale(gower_dist)
+
+x <- mds_gower[,1]
+y <- mds_gower[,2]
+
+# Create a data frame for plotting
+plot_data <- data.frame(x = x, y = y, label = row.names(df))
+# Plot using ggplot2 and ggrepel
+p1 <- ggplot(plot_data, aes(x = x, y = y, label = label)) +
+  geom_point() +
+  geom_text_repel(size = 3) +
+  labs(
+    x = "Coordinate 1",
+    y = "Coordinate 2",
+    title = "Metric MDS Gower"
+  ) +
+  theme_minimal()
+
+
+plot_data <- data.frame(x = x, y = y, label = df$Tags)
+# Plot using ggplot2 and ggrepel
+p2 <- ggplot(plot_data, aes(x = x, y = y, label = label)) +
+  geom_point() +
+  geom_text_repel(size = 3) +
+  labs(
+    x = "Coordinate 1",
+    y = "Coordinate 2",
+    title = "Metric MDS Gower"
+  ) +
+  theme_minimal()
+
+combined_plots <- plot_grid(p1,p2,ncol=2)
+combined_plots
+```
+
+Let's first take a look into the individuals that are separated as long as possible referenced in coordinate x . Those will be "Shyvana", "Lee sin" compared with "Senna". Comparing these champions we can see that "Lee sin" and "Shyvana" has similar attributes in numerical which are `Base.armor`, `HP.regeneration`, `Attack.Damage`, and for the categorical we got the Tag of **Fighter** and role of **Jungle**. As we can see "Senna" is quite "opposite" from them as she has not high `Base.HP` as the other two and also it differs from the `Tags`, `Role`, `Range.type"`. As we can observe in the table \@ref(tab:mds-table1).
+
+Now let's continue with the extreme of the y axis in the middle. The possible candidates will the individuals represented in the below table. According to the following table we can see that "Alistar" seems to be more durable and tank as it has a high number of `Base.Armor`, `Base.HP`, `HP.regeneration`, while "Gnar" seems to be more fragile (low level of `Base.armor` and `HP.regeneration`) compared to "Alistar", so he is separated from the others cluster (isolated). But we got some champions like "Aatrox", that is also positioned in the top but it also has high **Fighter** attributes. As we can see in the table \@ref(tab:mds-table2).
+
+Next, we see that we got a huge cluster in the left side in the plot, let's take a look the reason why they are in that place. We see that all their `Base.magic.resistance` are the same and they are all long attack range. Moreover all these champions, are from the role **Bottom** or **Middle**. All these similar attributes is the reason why they are positioned along the plot. We can observe that this huge cluster is separated to two sub-clusters, this is caused that the individuals have different roles and tags, **Bottom** and **Middle** role mentioned previously, and **Mage** and **Marksman** tags. In the table \@ref(tab:mds-table3), we can see the common variables.
+
+To conclude this about the coordinates of the 2-dimensional visualization. We see that the coordinate 1 seems to differs the champion like separating the ranged champions (left side) to the melee champions (right side). Thus, as we know most of the ranged type champions are **Mage** and **Marksman**, so it kind of separates also from the **Mage/Marksman** to the **Fighter/Assassin/Tank**. The second coordinate, we can not conclude anything as we do not have evidences by looking the positions that these champions are distributed. Even thought, this visualization allows us to see which characters have the most similar overall attributes and which ones are more distinct. For example, **Mage** and **Support** roles cluster closely together, suggesting they have quite similar characteristics. Meanwhile, **Tank** and **Marksman** occupy more distinct regions of the plot, given that the variables are very different between them, such as `Range.type` or `Base.armor`.
+
+
+# Multiple Correspondence Analysis
+
+The purpose of using MCA is because we want to understand the relationships between categorical variables (`Tags`, `Role`, `Range.type`, etc) that describe the champions and also see how different categories of variables associate with each other. For example, do certain roles tend to have specific range types or resource types? Or maybe identify clusters in how character attributes are distributed across different roles and tags. The variables analyzed are all the categorical variables, these variables describe different attributes making MCA an ideal choice.
+
+For all those dimension that have a eigenvalue higher than 1/12 (we got 12 dimensions), this is the condition to take the number of dimensions. So cause of that, we will take 8 dimension. In the operation of MCA, we got a variable `Resourse.type` that is not influence too much in our analysis, so we put this variable as `quali.sup`. As we can observe the figure \@ref(fig:mca-scree-plot) and table \@ref(tab:mca-eig-table) in the appendix section.
+
+```{r echo=FALSE}
+all_cat <- df[,c(1,2,3,4,14)]
+# names(all_cat)
+res.mca <- MCA(all_cat, quali.sup = 4, graph=FALSE, ncp = 8)
+```
+
+The right plot of below figure \@ref(fig:mca-variables-dimensions-12) represents the contributions of the original variables to the two main dimensions identified by MCA. Dimension 1 is strongly influenced by variables related to attack characteristics, such as `Range.type` and `Attack.range`. These variables has a significant contribution along this dimension, it means that this dimension captures a really important information for the association between the ranged and melee characteristics for all the champions. Dimension 2 seems to be linked to champions roles and their styles of combat. Thus the second dimension is influenced by the variables `Role` and `Tags`. These variables have a high contribution to Dimension 2, indicating that this coordinate captures information about the different categories based on roles and play style.
+
+The left plot shows the positions of individual categories for each variable, demonstrating the associations between them. We can observe that categories like **Role_Bottom** and **Tags_Marksman** are positioned far along Dimension 1, indicating strong associations with long-range characteristics. This is certainly true, as we know all the champions that play the tag of bottom marksman, their attack range is long. **Close Range** and **Melee** categories are positioned opposite to **Ranged** and **Long Range**, reinforcing the interpretation of Dimension 1 as capturing range-related variability. In addition, **Role_Support**, **Role_Middle**, **Tags_Mage**, and **Tags_Support** seems to cluster together, suggesting similarities in their attributes, such as resource type of mana and long attack range.
+
+Another interesting point is that **Tags_Mage** are very close to **Role_Middle** and also **Tags_Fighter** are very close to **Role_Top**, by seeing this we can extract the information that most of the champions that goes to **Middle** they are **Mage** and by the same reason for the **Top** and for the others roles. Other combination of dimensions are showed in the appendix with the same interpretation (figure \@ref(fig:mca-variables-plots)).
+
+```{r mca-variables-dimensions-12, echo=FALSE, fig.align='center', fig.height=4, fig.width=10, fig.cap="MCA Variables and Categories in Dimensions 1 and 2"}
+p1 <- fviz_mca_var(res.mca, choice = "mca.cor", 
+            repel = TRUE, # Avoid text overlapping (slow)
+            ggtheme = theme_minimal())
+p2 <- fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # avoid text overlapping (slow)
+             ggtheme = theme_minimal(), invisible = "quali.sup", axes = c(1,2),
+             )
+
+combined_plots <- plot_grid(p1, p2, ncol = 2)
+combined_plots
+```
+
+Looking at the below two plots (figure \@ref(fig:mca-individuals-dimensions-12)). The left one, where individual data points (champions) are colored based on their roles. While the second plot shows a MCA factor map with the quality of representation indicated by a color gradient. High quality values (in red) indicate champions that are well-represented by the first two dimensions. For instance, champions like "Jhin", "Kai'Sa", "Miss Fortune", and "Caitlyn" have high cos2 (bottom-right side), suggesting that their characteristics align strongly with the captured dimensions (**Long Range**, **Tags_Marksman**). Low cos2 values (in yellow) suggest champions that are less well-explained by these dimensions, possibly due to having different roles or unique attribute combinations. Champions like "Viego" and "Urgot" appear in the middle of the plot (center), indicating their attributes do not fit neatly into the primary dimensions of attack range or utility. 
+
+Moreover the right plot can be classify by clusters, the bottom-right cluster is dominated by marksman ("Jhin", "Kai'Sa"), highlighting their shared attributes such as high attack range. The top-right cluster contains many mages ("Orianna", "Lux") and supports ("Lulu", "Janna"), indicating a grouping based on **Middle** and **Support** roles due to they share some similar variables. The bottom-left section is contributed with melee fighters and tanks ("Yasuo", "Garen", "Riven"), aligning with **Close Range**, and finally the top-left section features assassin champions ("Zed", "Katarina").
+
+```{r mca-individuals-dimensions-12, echo=FALSE, fig.align='center', fig.width=10, fig.height=4, fig.cap="MCA Individuals and Categories in Dimensions 1 and 2"}
+p1 <- fviz_mca_ind(res.mca, 
+             label = "none", # hide individual labels
+             habillage = "Role", # color by groups 
+             palette = c("#00AFBB", "#E7B800","#FF4E08","#004A09","#C14E07"),
+             ellipse.type = "confidence",
+             ggtheme = theme_minimal())
+
+
+p2 <- fviz_mca_ind(res.mca, col.ind = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE, # Avoid text overlapping (slow if many points)
+             ggtheme = theme_minimal(), axes=c(1,2), labelsize=3)
+
+combined_plots <- plot_grid(p1, p2, ncol = 2)
+combined_plots
+```
+
+
+Now let's analyze the MCA grouping with Dimensions 3 and 4 (figure \@ref(fig:mca-individuals-plots1)). We can observe that champions like "Rengar", "Evelynn", "Ekko", and "Khazix" have high cos2 values (top-left side), meaning they are well-represented by these dimensions. These champions are known for as playing the role in **Middle** and **Jungle**, aligning with the interpretation of Dimension 4. While the other champions such as "Rakan", "Milio", and "Taric" are well represented in Dimension 3 (Middle-right side), likely due to their roles and tags as being a **Support**. Finally **Top** and **Bottom** champions like "Tahm Kench", "Nasus", "Volibear", "Caitlyn", "Kai'sa" have lower cos2 values (around of the center of plot), suggesting they possess attributes not well-explained by Dimensions 3 and 4. Additionally, in the appendix has more plots of other dimensions (figure \@ref(fig:mca-individuals-plots2)).
+
+All these MCA plots successfully illustrate the relationships between champions based on their roles and other attributes. Champions are distinctly separated into clusters based on their roles (bottom marksmen, middle mages, top tanks), like the `Role` and `Tags` variables are related.
+
+In Dimension 1, captures differences based on attack range type (melee or ranged), while Dimension 2 captures variations in the tag according to the range type. For example, the right side separates the **Mage** and **Support** from **Marksman**, and the left side separates **Tank** and **Assassin** from **Fighter**.
+
+Dimension 3 seems to capture differences in champion aggression, burst potential, separating utility supports from offensive champions roles like **Middle**, **Jungle**. Finally, Dimension 4 has high contribution champions like "Evelynn" and "Rengar" playing the Tags of **Assassin** and role of **Jungle**.
+
+
+# Cluster Analysis
+
+The objective is to determine the optimal number of clusters $k$, which grouping champions based on their gameplay characteristics, allowing us to compare and analyze how similar or distinct they are. For that matter, we will calculate the resulting optimal $k$ from applying either hierarchical or unhierarchical clustering methods. To achieve this, we only use the numerical variables in the dataset. By combining base stats with scaling (variables that include "per lvl") we get a more comprehensive view of the attributes of each champion.
+
+
+## Cluster Selection
+
+```{r echo=FALSE}
+numeric_vars <- df %>% select_if(is.numeric)
+out <- which(rownames(numeric_vars) == 'Thresh')
+scaled_df_with_out <- scale(numeric_vars[,-c(5,18)])
+scaled_df <- scale(numeric_vars[-out,-c(5,18)])
+d <- dist(scaled_df, method = "euclidean")
+```
+
+After doing a study comparison between all the different types of dendrograms available for hierarchical clustering (figure \@ref(fig:hierarchical-clustering-methods)), the **Ward's** method dendrogram gave the best results in our case. Additionally, we see that the champion "Thresh" is an outlier individual, since it is isolated from the other observations, indicating that none has common characteristics with this champion. So, we decided to remove it from the cluster selection. As we can see this plot in the appendix (figure \@ref(fig:hierarchical-clustering-outlier)).
+
+The structure of this dendrogram (figure \@ref(fig:ward-dendrogram)) shows very distinctively the clusters, making it an ideal choice for understanding the grouping of the data. The clusters are noticeable at a higher height threshold, demonstrating the effectiveness of **Ward's** method in minimizing intra-cluster variance.
+
+```{r ward-dendrogram, echo=FALSE, fig.align='center', fig.width=12, fig.height=4, fig.cap="Ward's Dendrogram"}
+fit_ward <- hclust(d, method = "ward.D2")
+p1 <- invisible(plot(
+  fit_ward,
+  labels = df$Name,
+  main = "Dendrogram of Ward's Method",
+  xlab = "",
+  sub = "",
+  cex = 0.6
+))
+invisible(p1)
+```
+
+In hierarchical clustering, the goal is to find clusters that are both interpretable and representative of the data's natural structure. Based on the visual structure of the dendrogram and the distribution of elements in the figure \@ref(fig:ward-dendrogram-clusters), we can conclude that $k=3$ is the better choice, capturing the main groupings in the data. While $k=4$ does not add significant value as it results in an unbalanced partition with one cluster being too small to provide meaningful insights.
+
+In our analysis, we determined that the optimal number of clusters differs depending on the clustering approach user. The **Ward's** method suggests that the optimal number of clusters is 3, while **K-Means** method identifies 4 clusters as the optimal solution. As we can see the result of unhierarchical clustering methods in the appendix (figure \@ref(fig:unhierarchical-clustering-methods)).
+
+For this specific analysis of **League of Legends** champions, where the goal is to balance interpretability with capturing distinct champion patterns, we have chosen the **3-cluster** solution from **Ward’s Method**. This allows for clearer insights into the unique roles and characteristics of champions while maintaining a balance between simplicity and explanatory power.
+
+## Profiling Analysis
+
+In the previous section, we selected **3 clusters** as the optimal number and chose PCA over MCA for cluster profiling. PCA provides tighter clusters (figure \@ref(fig:profiling-analysis-pca-plots)), making it easier to interpret, whereas MCA results in more dispersed clusters (figure \@ref(fig:profiling-analysis-mca-plots)), reducing clarity. Thus, PCA offers a more focused and centered clusters to analyze the behavior of the champions, even thought Clusters 1 and 3 has a few overlap, meaning some characteristics are similar.
+
+```{r profiling-analysis-pca-plots, echo=FALSE, fig.align='center', fig.height=4, fig.width=12, fig.cap="Profiling Analysis PCA", warning=FALSE}
+hcpc.pca <- HCPC(res.pca, nb.clust = 3, graph=FALSE)
+g1 <- fviz_dend(hcpc.pca, 
+          cex = 0.7,                     
+          palette = "jco",               
+          rect = TRUE, rect_fill = TRUE, 
+          rect_border = "jco",           
+          labels_track_height = 0.8,
+          ggtheme = theme_minimal()
+          )
+g1 <- g1 + guides(color = "none", fill = "none")
+g2 <- fviz_cluster(hcpc.pca, repel = TRUE, geom = "point", show.clust.cent = TRUE, palette = "Dark2", ggtheme = theme_minimal())
+combined_plot <- plot_grid(g1,g2, ncol=2)
+combined_plot
+```
+
+The most significant categorical variable for clusters are `Range.type` (p-value=4.194589e-28) and `Attack.range` (p-value=4.807783e-25). Variables `Tags` and `Role` are the least significant ones, indicating these variables are not relevant to distinct the clusters, as the first two variables. As we can observe the table \@ref(tab:hcpc-pca-category-test) in the appendix section.
+
+We see that Cluster 1 is characterized by **Long Range** and **Ranged** champions, since more than 90% of individuals in this cluster are strong associated with these two categories. Also, the dominant `Role` are **Marksman** and **Mage**, which related `Tags` are **Bottom** and **Middle** respectively, indicating a huge proportion of individuals with these categories are in this cluster, such as **Marksman** with Cla/Mod=96.428571 (96% of individuals that have this category are in Cluster 1) or **Mage** with Cla/Mod=88.571429. As we can see in the table \@ref(tab:hcpc-pca-category1).
+
+Cluster 2 is related with all resource types that are not mana (mana is the basic type), such as **Nothing** (not provide any resource), **Energy** or **Fury**. This behavior is indicated by the high proportion of distinct resource types, where all observations without mana resource are in this cluster. Additionally, champions with **Fighter** tag, **Top** role and **Melee** range type are located in this cluster, suggesting 88% of members in this cluster are **Melee** and 
+66% of individuals are **Fighter**. The table \@ref(tab:hcpc-pca-category2) shows the information analyzed.
+
+The most significant categories in Cluster 3 are **Melee** range type, **Tank** and **Fighter** tags, **Top** and **Jungle** roles, indicating this cluster is dominated by the champions with these characteristics, since that the 95% of individuals in this cluster are **Melee** and the proportion of **Tank** is high, with 87% of all champions. Additionally, more than 50% of total champions, who are categorized as **Fighter**, **Top** or **Jungle**, are located in this cluster. As we can observe in the table \@ref(tab:hcpc-pca-category3).
+
+On the other hand, the most correlated numerical variables are `Magic.resistance.per.lvl`, `Mana.per.lvl`, and `Mana.regeneration.per.lvl`, indicating these variables are the most significant among the clusters with the highest Eta2 (0.84469719, 0.72972407, 0.71309699 respectively). While, the variables like `AS.ratio`, `HP.per.lvl` and `Attack.damage.per.lvl` are the less significant ones. As we can see in the table \@ref(tab:hcpc-pca-numerical-var).
+
+In Cluster 1, the most significant variables `Base.Mana`, `Mana.regeneration.per.lvl` and `HP.per.lvl`, with v.test values as 6.137196, 5.102791 and -2.368723 respectively. Moreover, we can affirm that the champions in this cluster have a high `Base.mana` and `Mana.regeneration.per.lvl`, since the mean value of these variables in Cluster 1 are higher than the overall mean (mean value of all cluster). In contrast, the mean of `Base.armor` or `Magic.resitance.per.lvl` of this cluster are lower than the overall mean, indicating the weak capacity of durable. We need to highlight that these characteristics correspond to **Mage** or **Marksman** champions, as we affirmed previously that Cluster 1 is dominated by **Mage** and **Marksman**. As we can observe in the table \@ref(tab:hcpc-pca-numerical-quanti1).
+
+Oppositely, Cluster 2 is characterized by `Magic.resistance.per.lvl`, `Base.armor` and `Attack.damage`, affirmed by v.test and mean value of these variables in the cluster. Since the mean of variables `Magic.resistance.per.lvl`, `Base.armor` and `Attack.damage` are higher than the overall mean, such as the mean value of `Magic.resistance.per.lvl` is 341.666667 and it overall mean is 313.5868263. Additionally, the mean values of `Mana.per.lvl` and  `Mana.regeneration.per.lvl` are  0, affirming the analysis of previous part, where Cluster 2 is dominated by champions without mana resource. Combining the both analysis, we can approve that the champions in Cluster 2 have high durability and damage without mana resource, which are **Fighter** and **Top** champions. As shown in the table \@ref(tab:hcpc-pca-numerical-quanti2).
+
+Lastly, the most meaningful variables of Cluster 3 are `Mana.regeneration.per.lvl`, `Base.armor`, `HP.regeneration`, `Attack.damage` and `Base.magic.resistance`, and the mean value of these variables also are higher than the corresponding overall mean value, indicating this cluster groups champions with high durability and damage. These patterns are similar to Cluster 2, but the champions in this cluster have mana resource type, different to Cluster 2. 
+
+Combining the both informations, we can mentioned that Cluster 3 is dominated by champions with mana resource and high durability and attack damage, which are **Tank** and **Fighter** champions with **Top** and **Jungle** tags. Moreover, we observe that all the associated variables with this cluster have mean higher than the overall mean, suggesting the champions have a good statistics compare to the other clusters. As we can see the table \@ref(tab:hcpc-pca-numerical-quanti3) in the appendix.
+
+In conclusion, the profiling analysis explains well the significant patterns of each cluster. Cluster 1 exhibits champions with high mana capacity, with v.test values showing over-representation, it is strongly associated with **Mage**, **Marksman** and **Long Range** categories, reflecting high mana capacity patterns. Cluster 2 demonstrates high durability and damage, which are strongly linked with no mana resource, **Fighter** and **Top** champions. Cluster 3, while associated with only mana resource and melee champions, is characterized by extreme durability and damage of champions with **Tank** or **Fighter** roles in **Top** or **Jungle** tags.
+
+
+# Discriminant Analysis
+
+## Hotelling $T^2$ Test
+
+The purpose of the Hotelling $T^2$ test is to analyze the variance between the groups within the categorical variable `Range.type`, as it is the only variable suitable for this method (two distinct groups).
+
+We selected numerical variables based on their normality using `Shapiro-Wilk` and `Kolmogorov-Smirnov` tests, and plots(`histogram` and `Q-Q plot`). The `Shapiro-Wilk test` (table \@ref(tab:shapiro-test-variables)), which is sensitive to small deviations, indicates that none of the variables followed a normal distribution. However, the `Kolmogorov-Smirnov test` (table \@ref(tab:ks-test-variables)) and plots (figure \@ref(fig:variable-distributions)) shows that some variables (`Base.armor`, `HP.regeneration`, `Attack.damage`, `Attack.speed.per.lvl`) have a significant distribution indicated by p-values (less than 0.05). Moreover, observing at plots, we can affirm that some variables could still be considered normally distributed. Both tables present a selection of numerical variables that are the most significant for evaluating this assumption.
+
+Additionally, the p-value obtained by `Kolmogorov-Smirnov test` for the variable `Base.HP` was close to 0.05, so we decided to apply a transformation to this variable, which resulted in significant change in its distribution (table \@ref(tab:new-basehp-tests)). As we can see in the figure \@ref(fig:new-basehp-transformation), exists some residual outliers in the extreme quantiles in the `Q-Q` plot, which deviate from the diagonal line.
+
+```{r echo=FALSE}
+hotelling_df <- df
+```
+
+```{r include=FALSE}
+# The log-likelihood vs lambda plot 
+b<-boxcox(df$Base.HP~1)
+lambda <- b$x[which.max(b$y)]
+newBaseHP <- (df$Base.HP ^ lambda - 1) / lambda
+# newBaseHP
+df$Base.HP <- newBaseHP
+```
+
+Using `boxM()` function, we can observe that the null hypothesis of the homogeneity on variance is rejected (p-value=2.26e-05), indicating that the covariance matrices are not equal, suggesting unequal variance across the groups. As we can observe in the table \@ref(tab:range-type-boxm).
+
+After checking the variables, we use Hotelling's $T^2$ test to compare the multivariate means of the selected variables `Base.HP`, `Base.armor`, `HP.regeneration`, `Attack.damage`, and `Attack.speed.per.lvl` between the **Melee** and **Ranged** groups in `Range.type` variable (table \@ref(tab:hotelling-test)). The test resulted in a $T^2$ statistic of approximately 261.9775 with a p-value of < 2.2e-16. This indicates a statistically significant difference between the **Melee** and **Ranged** groups at the multivariate level for these variables.
+
+Specifically, this suggests that **Melee** and **Ranged** champions differ significantly in their average values for `Base.HP`, `Base.armor`, `HP.regeneration`, `Attack.damage`, and `Attack.speed.per.lvl`. This means that the **Melee** group likely prioritizes higher durability and regeneration attributes (e.g., `Base.armor` and `HP.regeneration`), while the **Ranged** group may emphasize offensive and scaling attributes (e.g., `Attack.damage` and `Attack.speed.per.lvl`). These differences reflect distinct gameplay roles and design philosophies for melee versus ranged champions in **League of Legends**.
+
+
+## MANOVA
+
+We aim to determine whether the variation observed in the numerical variables can be attributed to the different levels of the categorical variables, or if the differences between the groups are negligible. We take the levels of categorical variables `Role` and `Tags` to test the mean of the numerical variables, the ones that we are checked in the previous subsection, which have normal distribution. Therefore, we want to determine the similar variables between the different roles or tags, observing the common characteristics that might have between the champions.
+
+Using the `boxM()` function, we observed that not all numerical variables selected have the same variance across the groups defined by `Role` and `Tags`, suggesting that at least one group exhibits significantly different variance (p-value < 0.05). Further analysis revealed that the variable `Base.armor` has a distinctly different variance when grouped by `Tags`, indicating heterogeneity among these groups. In contrast, within the `Role` group, only two numerical variables, `Attack.damage` and `Attack.speed.per.lvl`, demonstrated consistent variance across all groups, reflecting homogeneity in this case. We could see the test results in the table \@ref(tab:variance-boxm).
+
+The `Role` group contains only two numerical variables, making it unnecessary to perform a `MANOVA` test, as testing mean equality with just two variables is less informative. Instead, these variables can be used directly in `discriminant analysis`. On the other hand, the `Tags` group, it is necessary to perform some `MANOVA` tests to determine if the selected numerical variables have significantly different mean across the groups, ensuring that the final selected variables contribute meaningfully to the analysis and help to identify the distinct groups.
+
+We only apply `MANOVA` tests to `Tags` group (table \@ref(tab:manova-test)), we can observe that all numerical variables have significant effect on `Tags` groups, showing a p-value less than 0.05. Indicating that none group has the same mean in these numerical variables. However, the variable `Attack.speed.per.lvl` exhibits a p-value of 0.009879, which is less significant that the other variables, indicating that this variable might have less variability across the `Tags` groups compared to the other variables.
+
+```{r echo=FALSE}
+tags_manova<-manova(cbind(Base.HP, HP.regeneration, Attack.damage, Attack.speed.per.lvl) ~ Tags,data=df)
+```
+
+Using `Tukey's HSD test`, we compared the means of each group for numerical variables (those that complete the assumptions). The results show that the variables `Base.HP`, `HP.regeneration` and `Attack.damage` have several groups with significantly different means, as indicate p-values less than 0.05 (table \@ref(tab:tukey-test-basehp), \@ref(tab:tukey-test-hpregeneration) and \@ref(tab:tukey-test-attack-damage)). For example, in the variable `Base.HP`, the `Mage` and `Tank` groups show a meaningful difference in their means, suggesting that champions with the `Tank` tag tend to have significantly higher base health compare to those with the `Mage` tag.
+
+In contrasts, for the variable `Attack.speed.per.lvl` (table \@ref(tab:tukey-test-attack-speed-lvl)), the mean differences between most groups are not significantly. Only the mean difference between the `Mage` and `Marksman` groups shows a slightly significant difference, with p-value of 0.0234610. This indicates that `Attack.speed.per.lvl` has limited utility to distinct the groups, as the differences in means for most groups in `Tags` are not meaningful.
+
+After analyzing the `MANOVA` test for the different categorical variables, we retained `Base.HP`, `HP.regeneration` and `Attack.damage` as the most significant variables for distinguishing observations based on `Tags`, given their strong differences across groups. These will be used in `discriminant analysis` to differentiate champions by `Tags`. For the variable `Role`, `Attack.damage` and `Attack.speed.per.lvl` are identified as significant variables and will be used in **discriminant analysis**. 
+ 
+
+## Discriminant Analysis
+
+In the previous section, we discussed two possible categorical variables, `Tags` and `Role`, that can be analyzed using discriminant analysis. Both variables have more than five levels, making them suitable for this technique. However, for the purpose of this section, we will focus on the `Tags` variable. While both variables are interesting to explore, choosing one does not significantly affect the insights gained.
+
+In this section, we aim to apply discriminant analysis to identify the features that are most predictive of a champion's tags. This will help us better understand how numerical attributes influence champion roles and classes. Such analysis not only aids in categorizing existing champions but also provides valuable insights for predicting the classification of newly introduced champions. For example, if a new champion is introduced with specific attribute values, the discriminant model can assign the champion to its most likely Tag with a quantifiable level of accuracy.
+
+We first performed **Linear Discriminant Analysis** (LDA) for the target variable `Tags`, using the predictors identified in the **MANOVA** section. This process involved carefully selecting the best candidate predictors for the LDA model. However, the results were not particularly strong, with a correct classification rate of approximately **56%**. While this accuracy is not very high, it still provided some insights into the relationships between attributes and the `Tags` variable.
+
+```{r echo=FALSE}
+dflda <- lda(Tags~Base.HP+HP.regeneration+Attack.damage, data=df)
+dfpred_lda <- predict(dflda)
+tab1 <- table(dfpred_lda$class,df$Tags)
+```
+
+Given the limitations of LDA, we applied **Quadratic Discriminant Analysis** (QDA) to the same target variable. Unlike LDA, QDA does not assume homogeneity of variance across groups, making it suitable when this assumption is violated. The predictors used for QDA included attributes such as `Base.HP`, `HP.regeneration`, `Attack.damage`, `Attack.speed.per.lvl`, and `Base.armor`.
+
+We verified the lack of homogeneity of variance for these attributes using the `boxM()` function (table \@ref(tab:tags-boxm)). The results showed a p-value significantly smaller than 0.05, leading us to reject the null hypothesis and conclude that these attributes do not exhibit homogeneity of variance. This made them appropriate for QDA, which is designed to handle such cases.
+
+In the figure \@ref(fig:qda-tags-probability), we got the prior probabilities for each class, representing the proportion of observations in each class before considering any predictor variables. For example, approximately 21% of the dataset belongs to the **Mage** class, while around 28% corresponds to the **Fighter** class, which has the largest proportion in the dataset.
+
+Next, we examined the mean values of the predictors for each class (table \@ref(tab:tags-mean)). For instance, the **Marksman** class has the highest mean value for `Attack.speed.per.lvl`, suggesting that champions with higher values for this attribute are more likely to belong to the **Marksman** class. Similarly, when looking at the mean of `Base.armor`, we observe that the **Fighter** class has a mean value of 34.28, while the **Tank** class has a mean of 36.12. This indicates that champions with higher `Base.armor` values are more likely to be classified as **Tank** or **Fighter**.
+
+The table \@ref(tab:confusion-matrix) presents the confusion matrix from our QDA model. In this matrix, the rows represent the predicted classes from the QDA model, while the columns correspond to the actual classes in the dataset. From the table, we can observe that most observations are classified correctly looking at diagonal line. Let’s calculate the percentage of correct classifications to evaluate the model’s performance.
+
+Finally, we achieved a correct classification rate of approximately **70%** with the QDA model (figure \@ref(fig:qda-class-wise-accuracy)), which is a significant improvement compared to the **56%** obtained with the LDA model (figure \@ref(fig:lda-class-wise-accuracy)). Additionally, the class with the highest percentage of correct classifications is **Support**, at around **81%**. This could be attributed to the fact that the predictors used in the analysis show distinct mean values for the **Support** class, making it easier to differentiate from other classes.
+
+On the other hand, the **Tank** class has the lowest percentage of correct classifications. Examining the confusion matrix, we observe that five observations from the **Tank** class were misclassified as **Fighter**. This is not surprising, as we previously noted that several predictors have similar mean values for **Tank** and **Fighter** classes, leading to challenges in distinguishing between them. A similar issue arises when classifying **Fighter** and **Tank** classes due to their shared characteristics. 
+
+The graph below (figure \@ref(fig:qda-predicted-vs-actual)) illustrates the predicted versus actual classes. It provides a visual representation of how observations are distributed across the different classes in `Tags`. The comparison between actual and predicted classes provides insight into how well the QDA model performs and areas where it faces challenges.
+
+From the graph, it is evident that the QDA model performs differently across classes. The **Fighter** class is the one that got the highest frequency, both in actual and predicted values because as we know from the previous explanations the 28% of the dataset are from the class **Fighter**. For the **Mage** and **Marksman** classes, the predictions align relatively well with the actual classes, indicating that the model captures their distinct features reasonably well. However, there are still some instances of misclassification, such as predictions of **Fighter** or other classes for these actual categories.
+
+The classes **Assassin**, and **Tank** display notable misclassifications. Predictions for these classes are dispersed across multiple categories, particularly **Fighter** for **Tank** class. This dispersion suggests that the QDA model struggles to clearly distinguish these classes, likely due to overlapping feature distributions or insufficient representation in the dataset.
+
+
+```{r qda-predicted-vs-actual, echo=FALSE, fig.align='center', fig.width=12, fig.height=6, fig.cap="QDA Actual vs Predicted Classes"}
+
+dfqda<-qda(Tags~Base.HP+HP.regeneration+Attack.damage+Attack.speed.per.lvl+Base.armor, data=df)
+dfpred<-predict(dfqda)
+
+# Create a data frame for plotting
+df_plot <- as.data.frame(table(Actual = dfpred$class, Predicted = df$Tags))
+
+# Plot a grouped bar chart
+ggplot(df_plot, aes(x = Actual, fill = Predicted, y = Freq)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Actual vs Predicted Classes", x = "Actual Class", y = "Frequency") +
+  theme_minimal()
+
+```
+
+Finally, the QDA model demonstrates varying success in classifying observations based on different predictor pairs. Some combinations (figure \@ref(fig:qda-partimat)), such as `HP.regeneration` vs. `Base.armor`, result in lower error rates (0.377). Thus, it plays a crucial role in distinguishing classes in this case, as they contribute to clearer decision boundaries and lower error rates. While others, like `Base.HP` and `HP.regeneration`, show higher error rates (0.521), reflecting less effective classification.
+
+Significant overlap is observed between certain classes, such as **Fighter** and **Tank**, which share similar predictor values. This overlap makes it challenging for the model to distinguish these classes, resulting in higher misclassification rates. Conversely, classes like **Support** exhibit better separation due to distinct predictor means, leading to higher classification accuracy.
+
+In conclusion, the application of QDA demonstrates its potential for predicting the `Tags` variable with a reasonable degree of accuracy. The analysis underscores the importance of understanding predictor distributions and ensuring balanced representation across classes.
+
+
+# Conclusion
+
+Once analyzed all the analytical methods proposed, we will present the relevant results in a comprehensive summary, which reflects the objective mentioned in each section.
+
+*   **PCA:** The significant dimensions are the first two, as they capture most of the variance. The first dimension presents the champions with powerful durability and damage capacities, such as "Tryndamere", "Darius", and "Illaoi". On the other hand, the dimension 2 is dominated by champions as "Sylas", "Ryze", and "Naafiri", suggesting a potentially mana growth statistics. Using professional knowledge about the game, we could affirm that the champions correlated in the first dimension corresponding to the role **Top**, and the role **Middle** for the second dimension.
+
+*   **MDS:** The two dimensional coordinates shows different clusters group by several common characteristics, indicating the champions within the same cluster have similar game statistics. The champions are grouped principally by their tags, suggesting the champions with same tag have common statistic behaviors, such as "Shyvana" and "Lee Sin" have similar statistics on `Base.armor`, `HP.regeneration`, and `Attack.Damage`.
+
+*   **MCA:** The significant dimensions reveal distinct patterns, where Dimension 1 captures variations in attack range (ranged vs melee), and  Dimension 2 highlights differences in tags related to range type. Combining these behaviors, the dimensions
+distinguish champions with tags like **Marksman**, **Mage**, which have **Long Range**, from **Fighter** and **Tank**, which are melee. For example, it differentiates "Jinx" (**Marksman** and **Long Range**) from "Illaoi" (**Fighter** and **Close Range**), suggesting that their statistics cannot be directly compared as their roles and tags are fundamentally different.
+
+*   **Cluster Analysis:** The optimal number of cluster is 3 using Ward's method. Cluster 1 is associated with high mana capacity, strongly linked to **Mage**, **Marksman**, and **Long Range** categories. Cluster 2 highlights champions with high durability and damage, tied to no mana resource, **Fighter**, and **Top** roles. Cluster 3 represents extreme durability and damage, regardless of resource type, associated with melee champions in **Tank** or **Fighter** roles, principally in **Top** or **Jungle** tags.
+
+*   **Discriminant Analysis:** Particularly using Quadratic Discriminant Analysis (QDA), demonstrated its utility in classifying champions based on their statistical attributes. While the model showed varying levels of accuracy depending on the predictor pairs, it was particularly effective in distinguishing classes with distinct means, such as **Support**, while facing challenges in separating overlapping classes like **Fighter** and **Tank**. This underscores the importance of understanding the distribution of predictors and the limitations of classification models in contexts of high overlap.
+
+In conclusion, the combination of these analytical techniques provided a holistic view of the dataset, uncovering meaningful patterns and relationships. The findings not only enhance our understanding of champion characteristics but also demonstrate the potential of statistical and computational methods in deriving actionable insights from the datasets.
+
+# Bibliography
+
+[1] Kassambara. (2017-09-23). PCA - Principal Component Analysis Essentials. Retrieved November 25, 2024, from \url{https://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials/}.
+
+[2] Kassambara. (2017-09-24). MCA - Multiple Correspondence Analysis in R: Essentials. Retrieved November 27, 2024, from \url{https://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/114-mca-multiple-correspondence-analysis-in-r-essentials/}.
+
+[3] Kassambara. (2017-09-25). HCPC - Hierarchical Clustering on Principal Components: Essentials. Retrieved December 2, 2024, from \url{https://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/117-hcpc-hierarchical-clustering-on-principal-components-essentials/}.
+
+
+# Appendix
+
+**This appendix shows all referenced figures and tables in the previous sections.**
+
+```{r data-transformation-attack-range, fig.align='center', fig.width=12, fig.height=4, echo=FALSE, fig.cap="Attack Range Histogram"}
+par(mfrow = c(1, 1))
+ggplot(df_data_transformation, aes(x = Attack.range)) +
+  geom_bar() +
+  labs(title = "Attack Range Frequency", x = "Attack Range", y = "Count") +
+  theme_minimal()
+```
+
+```{r shapiro-test-attack-range, echo=FALSE}
+shapiro_test_attack_range_result <- shapiro.test(df_data_transformation$Attack.range)
+shapiro_test_attack_range_df <- data.frame(
+  Variable = "Attack.range",
+  Statistic = shapiro_test_attack_range_result$statistic,
+  P_value = shapiro_test_attack_range_result$p.value
+)
+rownames(shapiro_test_attack_range_df) <- NULL
+kable(shapiro_test_attack_range_df, booktabs = TRUE, caption = "Shapiro Wilk Normality Test for Attack Range", digits = 15) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r data-visualization-histograms, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="Frequency Plots"}
+par(mfrow = c(1, 1))
+p1 <- ggplot(df_data_visualization, aes(x = Attack.range)) +
+  geom_bar() +
+  labs(title = "Attack Range Frequency", x = "Attack Range Type", y = "Count") +
+  theme_minimal()
+
+
+p2 <- ggplot(df_data_visualization, aes(x = Tags)) +
+  geom_bar() +
+  labs(title = "Tags Frequency", x = "Tags Type", y = "Count") +
+  theme_minimal()
+
+combined_plot <- plot_grid(p1, p2, nrow = 1)
+combined_plot
+```
+
+```{r data-visualization-boxplots, echo=FALSE, fig.align='center', fig.height=8, fig.width=12, fig.cap="Relevant Boxplots"}
+par(mfrow = c(2, 2))
+invisible(Boxplot(df_data_visualization$Base.HP,id=list(n=Inf,labels=row.names(df_data_visualization))))
+invisible(Boxplot(df_data_visualization$Attack.damage,id=list(n=Inf,labels=row.names(df_data_visualization))))
+invisible(Boxplot(df_data_visualization$Base.armor,id=list(n=Inf,labels=row.names(df_data_visualization))))
+invisible(Boxplot(df_data_visualization$Attack.speed,id=list(n=Inf,labels=row.names(df_data_visualization))))
+```
+
+```{r data-summary-proportional-tables1, results='asis', echo=FALSE}
+t <- table(df_data_visualization$Tags, df_data_visualization$Role)
+prop_t <- prop.table(t, 1)
+kable(prop_t, booktabs = TRUE, caption="Proportional Table: Tags vs Role") %>%
+  kable_styling("striped", full_width = FALSE, position = "center") %>%
+  row_spec(0, bold = TRUE)  # Make header bold
+```
+
+```{r data-summary-proportional-tables2, results='asis', echo=FALSE}
+t1 <- table(df_data_visualization$Role, df_data_visualization$Attack.range)
+prop_t1 <- prop.table(t1, 2)
+kable(prop_t1, booktabs = TRUE, caption="Proportional Table: Role vs Attack.range") %>%
+  kable_styling("striped", full_width = FALSE, position = "center") %>%
+  row_spec(0, bold = TRUE)  # Make header bold
+```
+
+```{r data-summary-correlation-plots, echo=FALSE, fig.cap="Correlation Plots", fig.align='center', fig.width=12, fig.height=8}
+par(mfrow = c(1, 1))
+correlation_plot <- plot(df_data_visualization[, c(5,7,10,19,22)])
+invisible(correlation_plot)
+```
+
+```{r data-summary-correlation-table, echo=FALSE, results='asis'}
+correlation_variable <- cor(df_data_visualization[, c(5,7,10,19,22)])
+kable(correlation_variable, booktabs = TRUE, caption="Correlation Table") %>%
+  kable_styling("striped", full_width = FALSE, position = "center") %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, width = "2cm") 
+```
+
+
+```{r pca-scree-plot, fig.align='center', fig.width=10, fig.height=4, fig.cap="PCA Scree Plot", echo=FALSE}
+par(mfrow = c(1, 1))
+fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 35))
+```
+
+```{r pca-eig-table, echo=FALSE, results='asis'}
+# eigenvalues and percentage of variances
+eig <- res.pca$eig
+eig_data <- res.pca$eig[1:10, ]
+kable(eig_data, booktabs = TRUE, caption="Eigenvalue of PCA Dimensions")
+```
+
+```{r pca-correlation-plot, fig.width=6, fig.height=4, echo=FALSE, fig.cap="PCA Correlation Plot"}
+# The loadings of the variables on the components. Since the variables are scales, the coord and cor are the same
+# res.pca$var$cor
+invisible(corrplot(res.pca$var$cor, is.corr = TRUE, tl.cex = 0.7))
+```
+
+```{r pca-variables-plots, echo=FALSE, fig.align='center', fig.height=10, fig.width=10, fig.cap="PCA Variables Dimensions 3, 4 and 5"}
+par(mfrow=c(1,1))
+p3 <- fviz_pca_var(res.pca, col.var = "black", repel = TRUE, axes= c(3, 4))
+p4 <- fviz_pca_var(res.pca, col.var = "black", repel = TRUE, axes = c(4, 5))
+p5 <- fviz_pca_var(res.pca, col.var = "black", repel = TRUE, axes = c(5, 6))
+
+combined_plot <- plot_grid(p3, p4, p5, nrow=2, ncol=2)
+combined_plot
+```
+
+```{r pca-variables-contributions, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="Contribution Histograms in Dimensions 1, 2 and 3"}
+par(mfrow = c(1, 1))
+h1 <- fviz_contrib(res.pca, choice = "var", axes = c(1,2), top = 10)
+h2 <- fviz_contrib(res.pca, choice = "var", axes = c(2,3), top = 10)
+
+combined_plot <- plot_grid(h1,h2,nrow=1,ncol=2)
+combined_plot
+```
+
+```{r pca-individuals-plots, echo=FALSE, fig.align='center', fig.height=7, fig.width=12, fig.cap="PCA Individuals Dimensions 3, 4 and 5"}
+par(mfrow = c(1, 1))
+p3 <- fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE, ggtheme = theme_minimal(), axes=c(3,4), labelsize=3)
+p4 <- fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE, ggtheme = theme_minimal(), axes=c(4,5), labelsize=3)
+p5 <- fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE, ggtheme = theme_minimal(), axes=c(5,6), labelsize=3)
+
+combined_plot <- plot_grid(p3, p4, p5, nrow=2, ncol=2)
+combined_plot
+```
+
+```{r pca-individuals-contributions, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="PCA Individuals Contributions"}
+par(mfrow = c(1, 1))
+# Extract the individual contributions and coordinates
+ind_contrib <- res.pca$ind$contrib
+ind_coords <- res.pca$ind$coord
+
+# Positive contributions on PC1
+positive_ind_pc1 <- ind_contrib[ind_coords[, 1] > 0, ]
+positive_ind_pc1 <- positive_ind_pc1[order(-positive_ind_pc1[, 1]), ]
+top_positive_pc1 <- head(positive_ind_pc1, 10)
+
+# Create ggplot for PC1
+plot_pc1 <- ggplot(data.frame(
+  Individual = rownames(top_positive_pc1),
+  Contribution = top_positive_pc1[, 1]
+), aes(x = reorder(Individual, Contribution), y = Contribution)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Positive Contributions to PC1",
+    x = "Individual",
+    y = "Contribution (%)"
+  ) +
+  theme_minimal()
+
+# Positive contributions on PC2
+positive_ind_pc2 <- ind_contrib[ind_coords[, 2] > 0, ]
+positive_ind_pc2 <- positive_ind_pc2[order(-positive_ind_pc2[, 2]), ]
+top_positive_pc2 <- head(positive_ind_pc2, 10)
+
+# Create ggplot for PC2
+plot_pc2 <- ggplot(data.frame(
+  Individual = rownames(top_positive_pc2),
+  Contribution = top_positive_pc2[, 2]
+), aes(x = reorder(Individual, Contribution), y = Contribution)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Positive Contributions to PC2",
+    x = "Individual",
+    y = "Contribution (%)"
+  ) +
+  theme_minimal()
+
+# Arrange plots in a grid
+combined_plot <- plot_grid(plot_pc1, plot_pc2, nrow = 2)
+combined_plot
+```
+
+
+```{r mds-table1, echo=FALSE}
+c1 <- which(row.names(df_mds) == "Shyvana")
+c2 <- which(row.names(df_mds) == "Lee Sin")
+c3 <- which(row.names(df_mds) == "Senna")
+
+subset_data <- data_with_categorical[c(c1, c2, c3), ]
+kable(subset_data, booktabs = TRUE, caption = "MDS Table 1") %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r mds-table2, echo=FALSE}
+c1 <- which(row.names(df_mds) == "Gnar")
+c2 <- which(row.names(df_mds) == "Alistar")
+c3 <- which(row.names(df_mds) == "Aatrox")
+
+subset_data <- data_with_categorical[c(c1, c2, c3), ]
+kable(subset_data, booktabs = TRUE, caption = "MDS Table 2") %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r mds-table3, echo=FALSE}
+c1 <- which(row.names(df_mds) == "Aphelios")
+c2 <- which(row.names(df_mds) == "Draven")
+c3 <- which(row.names(df_mds) == "Azir")
+c4 <- which(row.names(df_mds) == "Corki")
+c5 <- which(row.names(df_mds) == "Ahri")
+c6 <- which(row.names(df_mds) == "Zeri")
+c7 <- which(row.names(df_mds) == "Ziggs")
+
+subset_data <- data_with_categorical[c(c1,c2,c3,c4,c5,c6,c7),]
+kable(subset_data, booktabs = TRUE, caption = "MDS Table 3") %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+
+```{r mca-scree-plot, echo=FALSE, fig.align='center', fig.height=5, fig.width=12, fig.cap="MCA Scree Plot"}
+par(mfrow = c(1, 1))
+fviz_screeplot(res.mca, addlabels = TRUE, ylim = c(0, 45))
+```
+
+```{r mca-eig-table, echo=FALSE, results='asis'}
+eig <- res.mca$eig
+# res.mca$eig[,1] > 1/12
+kable(eig, booktabs = TRUE, caption="Eigenvalue of MCA Dimensions")
+```
+
+```{r mca-variables-plots, echo=FALSE, fig.align='center', fig.width=12, fig.height=6, fig.cap="MCA Variables Dimensions 2, 3, 4 and 5" }
+par(mfrow = c(1, 1))
+p1 <- fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # avoid text overlapping (slow)
+             ggtheme = theme_minimal(), invisible = "quali.sup", axes = c(2,3),
+             )
+
+p2 <- fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # avoid text overlapping (slow)
+             ggtheme = theme_minimal(), invisible = "quali.sup", axes = c(3,4),
+             )
+
+
+p3 <- fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # avoid text overlapping (slow)
+             ggtheme = theme_minimal(), invisible = "quali.sup", axes = c(4,5),
+             )
+
+combined_plot <- plot_grid(p1,p2,p3,ncol = 3)
+combined_plot
+```
+
+```{r mca-individuals-plots1, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="MCA Individuals Dimensions 3 and 4"}
+par(mfrow = c(1, 1))
+p1 <- fviz_mca_ind(res.mca, 
+             label = "none", # hide individual labels
+             habillage = "Role", # color by groups 
+             palette = c("#00AFBB", "#E7B800","#FF4E08","#004A09","#C14E07"),
+             ellipse.type = "confidence",
+             ggtheme = theme_minimal(), axes = c(3,4))
+
+
+p2 <- fviz_mca_ind(res.mca, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE, # Avoid text overlapping (slow if many points)
+             ggtheme = theme_minimal(), axes=c(3,4), labelsize=3)
+
+combined_plot <- plot_grid(p1, p2, ncol = 2)
+combined_plot
+```
+
+```{r mca-individuals-plots2, echo=FALSE, fig.align='center', fig.height=6, fig.width=12, fig.cap="MCA Individuals Dimensions 4, 5 and 6"}
+par(mfrow = c(1, 1))
+p1 <- fviz_mca_ind(res.mca, 
+             label = "none", # hide individual labels
+             habillage = "Role", # color by groups 
+             palette = c("#00AFBB", "#E7B800","#FF4E08","#004A09","#C14E07"),
+             ellipse.type = "confidence",
+             ggtheme = theme_minimal(), axes = c(4,5))
+
+
+p2 <- fviz_mca_ind(res.mca, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE, # Avoid text overlapping (slow if many points)
+             ggtheme = theme_minimal(), axes=c(4,5), labelsize=3)
+
+p3 <- fviz_mca_ind(res.mca, 
+             label = "none", # hide individual labels
+             habillage = "Role", # color by groups 
+             palette = c("#00AFBB", "#E7B800","#FF4E08","#004A09","#C14E07"),
+             ellipse.type = "confidence",
+             ggtheme = theme_minimal(), axes = c(5,6))
+
+
+p4 <- fviz_mca_ind(res.mca, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE, # Avoid text overlapping (slow if many points)
+             ggtheme = theme_minimal(), axes=c(5,6), labelsize=3)
+
+combined_plot <- plot_grid(p1,p2,p3,p4,nrow=2,ncol = 2)
+combined_plot
+```
+
+
+```{r hierarchical-clustering-methods, echo=FALSE, fig.align='center', fig.width=12, fig.height=8, fig.cap="Dendrograms with different methods"}
+par(mfrow=c(2,2))
+fit_single <- hclust(d, method = "single")
+plot(
+  fit_single,
+  labels = df$Name,
+  main = "Single Linkage Dendogram",
+  xlab = "",
+  sub = "",
+  cex = 0.6
+)
+
+fit_complete <- hclust(d, method = "complete")
+plot(
+  fit_complete,
+  labels = df$Name,
+  main = "Complete Linkage Dendogram",
+  xlab = "",
+  sub = "",
+  cex = 0.6
+)
+
+fit_average <- hclust(d, method = "average")
+plot(
+  fit_average,
+  labels = df$Name,
+  main = "Average Linkage Dendrogram",
+  xlab = "",
+  sub = "",
+  cex = 0.6
+)
+
+fit_centroid <- hclust(d, method = "centroid")
+plot(
+  fit_centroid,
+  labels = df$Name,
+  main = "Centroid Method Dendrogram",
+  xlab = "",
+  sub = "",
+  cex = 0.6
+)
+```
+
+```{r hierarchical-clustering-outlier, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="Dendrogram with Outlier"}
+par(mfrow=c(1,1))
+d_out <- dist(scaled_df_with_out, method = "euclidean")
+fit_ward <- hclust(d_out, method = "ward.D2")
+plot(
+  fit_ward,
+  labels = df$Name,
+  main = "Dendrogram of Ward's Method",
+  xlab = "",
+  sub = "",
+  cex = 0.6
+)
+```
+
+```{r ward-dendrogram-clusters, echo=FALSE, fig.align='center', fig.width=12, fig.height=6,  fig.cap="Dendrogram with different clusters"}
+par(mfrow = c(1, 2))
+d <- dist(scaled_df, method = "euclidean")
+fit_ward <- hclust(d, method = "ward.D2")
+plot(fit_ward,labels = df$Name,main="Dendrogram of Ward's Method")
+rect.hclust(fit_ward, k= 3, border="green")
+
+plot(fit_ward,labels = df$Name,main="Dendrogram of Ward's Method")
+rect.hclust(fit_ward, k = 4, border = "blue")
+
+```
+
+```{r unhierarchical-clustering-methods, echo=FALSE, fig.align='center', fig.width=12, fig.height=4, fig.cap="Unhierarchical Clustering"}
+par(mfrow=c(1,2))
+set.seed(123)
+aux<-c()
+for (i in 2:6){
+  k<-kmeans(scaled_df,centers=i,nstart=25)
+  aux[i-1]<-k$tot.withinss
+}
+plot(2:6, aux, xlab="Number of Clusters", ylab="TWSS", type="l", main="TWSS vs. number of clusters")
+
+aux<-c()
+for (i in 2:10){
+  k<-kmeans(scaled_df,centers=i,nstart=25)
+  aux[i-1]<-((k$betweenss)*(nrow(scaled_df)-i))/((k$tot.withinss)*(i-1))
+}
+plot(2:10,aux, xlab="Number of Clusters", ylab="Pseudo-F", type="l", main="Pseudo F Index")
+
+```
+
+```{r include=FALSE}
+k_optimal1 <- kmeans(scaled_df, centers = 4, nstart = 50)
+k_optimal2 <- kmeans(scaled_df, centers = 3, nstart = 50)
+k_optimal1$betweenss/k_optimal1$totss
+k_optimal2$betweenss/k_optimal2$totss
+```
+
+
+```{r profiling-analysis-mca-plots, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="Profiling Analysis MCA"}
+par(mfrow=c(1,1))
+hcpc.mca <- HCPC(res.mca, nb.clust = 3, graph = FALSE)
+g1 <- fviz_dend(hcpc.mca, 
+          cex = 0.7,                     
+          palette = "jco",               
+          rect = TRUE, rect_fill = TRUE, 
+          rect_border = "jco",           
+          labels_track_height = 0.8,
+          ggtheme = theme_minimal()
+          )
+g1 <- g1 + guides(color = "none", fill = "none")
+g2 <- fviz_cluster(hcpc.mca, repel = TRUE, geom = "point", show.clust.cent = TRUE, palette = "Dark2")
+grid.arrange(g1,g2, ncol=2)
+```
+
+```{r hcpc-pca-category-test, echo=FALSE}
+hcpc.pca.test <- hcpc.pca$desc.var$test.chi2
+kable(hcpc.pca.test, booktabs = TRUE, caption = "Categorical variables profiling", digit=28) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-category1, echo=FALSE}
+hcpc.pca.category <- hcpc.pca$desc.var$category
+hcpc.pca.category_1 <- as.data.frame(hcpc.pca.category[1])
+kable(hcpc.pca.category_1, booktabs = TRUE, caption = "Categorical variables profiling of Cluster 1", digit=33) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-category2, echo=FALSE}
+hcpc.pca.category_2 <- as.data.frame(hcpc.pca.category[2])
+kable(hcpc.pca.category_2, booktabs = TRUE, caption = "Categorical variables profiling of Cluster 2", digit=33) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-category3, echo=FALSE}
+hcpc.pca.category_3 <- as.data.frame(hcpc.pca.category[3])
+kable(hcpc.pca.category_3, booktabs = TRUE, caption = "Categorical variables profiling of Cluster 3", digit=33) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-numerical-var, echo=FALSE}
+hcpc.pca.var <- hcpc.pca$desc.var$quanti.var
+kable(hcpc.pca.var, booktabs = TRUE, caption = "Numerical variables profiling", digit=67) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-numerical-quanti1, echo=FALSE}
+hcpc.pca.quanti <- hcpc.pca$desc.var$quanti
+hcpc.pca.quanti_1 <- as.data.frame(hcpc.pca.quanti[1])
+kable(hcpc.pca.quanti_1, booktabs = TRUE, caption = "Numerical variables profiling of Cluster 1", digit=32) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-numerical-quanti2, echo=FALSE}
+hcpc.pca.quanti_2 <- as.data.frame(hcpc.pca.quanti[2])
+kable(hcpc.pca.quanti_2, booktabs = TRUE, caption = "Numerical variables profiling of Cluster 2", digit=32) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r hcpc-pca-numerical-quanti3, echo=FALSE}
+hcpc.pca.quanti_3 <- as.data.frame(hcpc.pca.quanti[3])
+kable(hcpc.pca.quanti_3, booktabs = TRUE, caption = "Numerical variables profiling of Cluster 3", digit=32) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+
+```{r variable-distributions, echo=FALSE, fig.align='center', fig.width=12, fig.height=12, fig.cap="Variable Distributions", warning=FALSE}
+par(mfrow=c(4,3))
+
+shapiro_results <- list()
+ks_results <- list()
+num_df <- hotelling_df[, c(5,10,15,19,21)]
+for (i in 1:length(num_df)) {
+  hist(num_df[,i],main= paste(colnames(num_df)[i]))
+  qqnorm(num_df[,i],main= paste(colnames(num_df)[i]) )
+  qqline(num_df[,i])
+  # print(colnames(num_df)[i])
+  # print(shapiro.test(num_df[,i])) 
+  # print(ks.test(num_df[,i], "pnorm", mean=mean(num_df[,i]), sd=sd(num_df[,i])))
+  
+  shapiro_test_result <- shapiro.test(num_df[,i])
+  shapiro_results[[i]] <- data.frame(
+    Variable = colnames(num_df)[i],
+    Statistic = shapiro_test_result$statistic,
+    P_value = shapiro_test_result$p.value
+  )
+  
+  ks_test_result <- ks.test(num_df[,i], "pnorm", mean=mean(num_df[,i]), sd=sd(num_df[,i]))
+  ks_results[[i]] <- data.frame(
+    Variable = colnames(num_df)[i],
+    Statistic = ks_test_result$statistic,
+    P_value = ks_test_result$p.value,
+    Alternative = ks_test_result$alternative
+  )
+  
+}
+```
+
+```{r shapiro-test-variables, echo=FALSE}
+shapiro_test_df <- do.call(rbind, shapiro_results)
+rownames(shapiro_test_df) <- NULL
+kable(shapiro_test_df, booktabs = TRUE, caption = "Shapiro-Wilk normality test") %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r ks-test-variables, echo=FALSE}
+ks_test_df <- do.call(rbind, ks_results)
+rownames(ks_test_df) <- NULL
+kable(ks_test_df, booktabs = TRUE, caption = "Asymptotic one-sample Kolmogorov-Smirnov test") %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r new-basehp-transformation, echo=FALSE, fig.align='center', fig.height=5, fig.width=12, fig.cap="Base.HP transformation"}
+par(mfrow=c(2,2))
+qqnorm(newBaseHP,main= paste(colnames(newBaseHP) ))
+qqline(newBaseHP)
+hist(newBaseHP)
+boxplot(newBaseHP)
+```
+
+```{r new-basehp-tests, echo=FALSE, warning=FALSE}
+newBaseHP_results <- list()
+shapiro_test_newBaseHP <- shapiro.test(newBaseHP)
+ks_test_newBaseHP <- ks.test(newBaseHP, "pnorm", mean=mean(newBaseHP), sd=sd(newBaseHP))
+
+newBaseHP_results[[1]] <- data.frame(
+  Type = "Shapiro-Wilk normality test",
+  Statistic = shapiro_test_newBaseHP$statistic,
+  P_value = shapiro_test_newBaseHP$p.value,
+  Alternative = ""
+)
+
+newBaseHP_results[[2]] <- data.frame(
+  Type = "Asymptotic one-sample Kolmogorov-Smirnov test",
+  Statistic = ks_test_newBaseHP$statistic,
+  P_value = ks_test_newBaseHP$p.value,
+  Alternative = ks_test_newBaseHP$alternative
+)
+
+newBaseHP_df <- do.call(rbind, newBaseHP_results)
+rownames(newBaseHP_df) <- NULL
+kable(newBaseHP_df, booktabs = TRUE, caption = "New Base.HP Test Results") %>%
+  kable_styling(latex_options = c("scale_down"))
+
+```
+
+```{r range-type-boxm, echo=FALSE}
+tags_boxm <- boxM(df[, c(5, 10, 15, 19, 21)], df$Range.type)
+tags_table <- data.frame(
+  Group = "Range Type",
+  Statistic = tags_boxm$statistic,
+  df1 = tags_boxm$parameter[1],
+  p_value = tags_boxm$p.value
+)
+
+kable(
+  tags_table, 
+  booktabs = TRUE,
+  caption = "Box's M Test Result on Range Type", 
+  col.names = c("Group", "M Statistic", "df1", "P-Value")
+)
+```
+
+```{r hotelling-test, echo=FALSE}
+hotelling_test <- HotellingsT2Test(cbind(Base.HP, Base.armor, HP.regeneration, Attack.damage, Attack.speed.per.lvl)~Range.type,data=df,test="chi")
+hotelling_test_table <- data.frame(
+  Group = "Range Type",
+  Statistic = hotelling_test$statistic[1],
+  df = hotelling_test$parameter,
+  p_value = hotelling_test$p.value[1],
+  alternative = hotelling_test$alternative,
+  null_value = hotelling_test$null.value
+)
+
+kable(
+  hotelling_test_table,
+  booktabs = TRUE,
+  caption = "Hotelling's two sample T2-test",
+  col.names = c("Group", "T.2 Statistic", "df", "P-Value", "Alternative", "Null Value"),
+  digit = 10
+)
+```
+
+
+```{r variance-boxm, echo=FALSE, results='asis'}
+
+role_boxm <- boxM(df[, c(19, 21)], df$Role)
+role_table <- data.frame(
+  Group = "Role",
+  Statistic = role_boxm$statistic,
+  df1 = role_boxm$parameter[1],
+  p_value = role_boxm$p.value
+)
+
+tags_boxm <- boxM(df[, c(5, 15, 19, 21)], df$Tags)
+tags_table <- data.frame(
+  Group = "Tags",
+  Statistic = tags_boxm$statistic,
+  df1 = tags_boxm$parameter[1],
+  p_value = tags_boxm$p.value
+)
+
+combined_table <- rbind(role_table, tags_table)
+
+kable(
+  combined_table, 
+  booktabs = TRUE,
+  caption = "Box's M Test Results", 
+  col.names = c("Group", "M Statistic", "df1", "P-Value")
+)
+```
+
+```{r manova-test, echo=FALSE}
+summary_results <- summary.aov(tags_manova)
+extract_summary <- function(summary_object) {
+  response_names <- names(summary_object)
+  results <- do.call(rbind, lapply(response_names, function(response) {
+    data <- as.data.frame(summary_object[[response]])
+    data$Response <- response
+    data$Effect <- rownames(data)
+    rownames(data) <- NULL
+    return(data)
+  }))
+  return(results)
+}
+
+# Extract the table
+summary_table <- extract_summary(summary_results)
+
+# Rearrange and clean the table
+summary_table <- summary_table[, c("Response", "Effect", "Df", "Sum Sq", "Mean Sq", "F value", "Pr(>F)")]
+names(summary_table) <- c("Response", "Effect", "Df", "Sum of Squares", "Mean Square", "F Value", "Pr(>F)")
+
+# Format and render the table with kable
+kable(
+  summary_table,
+  booktabs = TRUE, 
+  caption = "Summary for MANOVA Results",
+  digits = 16
+) %>%
+  kable_styling(latex_options = c("scale_down"))
+
+```
+
+```{r tukey-test-basehp, echo=FALSE}
+baseHP.tukey <- TukeyHSD(aov(Base.HP~Tags,data=df),"Tags")
+baseHP_tukey_table <- as.data.frame(baseHP.tukey$Tags)
+kable(baseHP_tukey_table, booktabs=TRUE, caption="Tukey HSD Test Results for the Effect of Tags on Base HP", digits = 5) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r tukey-test-hpregeneration, echo=FALSE}
+HPregeneration.tukey <- TukeyHSD(aov(HP.regeneration~Tags,data=df),"Tags")
+HPregeneration_tukey_table <- as.data.frame(HPregeneration.tukey$Tags)
+kable(HPregeneration_tukey_table, booktabs=TRUE, caption="Tukey HSD Test Results for the Effect of Tags on HP Regeneration", digits = 5) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+```{r tukey-test-attack-damage, echo=FALSE}
+attack.damage.tukey <- TukeyHSD(aov(Attack.damage~Tags,data=df),"Tags")
+attack_damage_tukey_table <- as.data.frame(attack.damage.tukey$Tags)
+kable(attack_damage_tukey_table, booktabs=TRUE, caption="Tukey HSD Test Results for the Effect of Tags on Attack Damage", digits = 5) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+
+```{r tukey-test-attack-speed-lvl, echo=FALSE}
+attack.speed.lvl.tukey <- TukeyHSD(aov(Attack.speed.per.lvl~Tags,data=df),"Tags")
+attack_speed_lvl_tukey_table <- as.data.frame(attack.speed.lvl.tukey$Tags)
+kable(attack_speed_lvl_tukey_table, booktabs=TRUE, caption="Tukey HSD Test Results for the Effect of Tags on Attack Speed per lvl", digits = 5) %>%
+  kable_styling(latex_options = c("scale_down"))
+```
+
+
+```{r tags-boxm, echo=FALSE}
+tags_boxm <- boxM(df[, c(5, 10, 15, 19, 21)], df$Tags)
+tags_table <- data.frame(
+  Group = "Tags",
+  Statistic = tags_boxm$statistic,
+  df1 = tags_boxm$parameter[1],
+  p_value = tags_boxm$p.value
+)
+
+kable(
+  tags_table, 
+  booktabs = TRUE,
+  caption = "Box's M Test Result on Tags", 
+  col.names = c("Group", "M Statistic", "df1", "P-Value")
+)
+```
+
+```{r qda-tags-probability, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="QDA - Probabilities of Tags"}
+
+prior_df <- data.frame(
+  Class = names(dfqda$prior),
+  Probability = dfqda$prior
+)
+
+# Create a bar plot
+ggplot(prior_df, aes(x = Class, y = Probability, fill = Class)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Prior Probabilities of Classes",
+       x = "Class",
+       y = "Probability") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
+  geom_text(aes(label = round(Probability, 2)), vjust = -0.5) # Optional: adds nice colors
+```
+
+```{r tags-mean, echo=FALSE}
+# Convert the group means to a data frame
+means_df <- data.frame(Class = rownames(dfqda$means), dfqda$means)
+rownames(means_df) <- NULL
+
+kable(
+  means_df,
+  col.names = c("Class", colnames(dfqda$means)),
+  caption = "Group Means for Each Class",
+  booktabs = TRUE) 
+```
+
+```{r confusion-matrix, echo=FALSE}
+tab2<-table(dfpred$class,df$Tags)
+# Convert the table to a data frame for easier formatting
+confusion_df <- as.data.frame.matrix(tab2)
+
+# Print the table using kable
+kable(confusion_df, 
+      booktabs = TRUE,
+      caption = "Confusion Matrix: Predicted vs Actual Classes")
+```
+
+```{r qda-class-wise-accuracy, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="QDA Class-wise Accuracy"} 
+classrate<-sum(diag(tab2))/sum(tab2)
+print(paste("QDA Correct Classification Rate:", as.character(classrate)))
+
+
+class_accuracy <- diag(prop.table(tab2, 1))
+
+# Create a data frame for plotting
+accuracy_df <- data.frame(
+  Class = names(class_accuracy),
+  Accuracy = class_accuracy
+)
+
+# Create a bar plot
+ggplot(accuracy_df, aes(x = Class, y = Accuracy, fill = Class)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Class-wise Accuracy",
+    x = "Class",
+    y = "Proportion Correct"
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
+  geom_text(aes(label = round(Accuracy, 2)), vjust = -0.5)  # Add accuracy labels
+
+#sum(diag(prop.table(tab2)))
+```
+
+```{r lda-class-wise-accuracy, echo=FALSE, fig.align='center', fig.width=12, fig.height=5, fig.cap="LDA Class-wise Accuracy", warning=FALSE} 
+classrate<-sum(diag(tab1))/sum(tab1)
+print(paste("LDA Correct Classification Rate:", as.character(classrate)))
+
+
+class_accuracy <- diag(prop.table(tab1, 1))
+
+# Create a data frame for plotting
+accuracy_df <- data.frame(
+  Class = names(class_accuracy),
+  Accuracy = class_accuracy
+)
+
+# Create a bar plot
+ggplot(accuracy_df, aes(x = Class, y = Accuracy, fill = Class)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Class-wise Accuracy",
+    x = "Class",
+    y = "Proportion Correct"
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
+  geom_text(aes(label = round(Accuracy, 2)), vjust = -0.5)  # Add accuracy labels
+
+#sum(diag(prop.table(tab2)))
+```
+
+```{r qda-partimat, echo=FALSE, fig.align='center', fig.height=10, fig.width=10, fig.cap="QDA Partition Plot"}
+partimat(Tags ~ Base.HP+HP.regeneration+Attack.damage+Attack.speed.per.lvl+Base.armor, data=df,method="qda")
+```
+
+
