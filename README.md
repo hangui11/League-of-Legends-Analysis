@@ -1,4 +1,4 @@
-# 🧠 League of Legends Champion Analysis (R)
+# League of Legends Champion Analysis (R)
 
 This project analyzes detailed information on **167 League of Legends champions** using advanced statistical techniques in **R**. The main objective is to determine the **best champion for each role** — Top, Jungle, Mid, Bottom, and Support — based on their base and growth statistics.
 
